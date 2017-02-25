@@ -9,7 +9,7 @@ import tk.irishat.config.SonarLauncherConfig;
 /**
  * @author Rishat Ibrahimov
  */
-@SpringBootApplication(scanBasePackages = {"tk.irishat.sonar"})
+@SpringBootApplication(scanBasePackages = {"tk.irishat.controller"})
 @Import(SonarLauncherConfig.class)
 @EnableConfigurationProperties
 public class SonarLauncherApp {

@@ -45,34 +45,36 @@ public class SonarRunnerController {
   @RequestMapping(method = RequestMethod.POST)
   public String scan(@RequestParam("URL") String repoUrl) throws IOException, GitAPIException {
     String projectKey = getProjectKey(repoUrl);
-    executorService.submit(() -> {
-      File repo = null;
-      try {
-        LOGGER.info("Cloning " + repoUrl);
-        repo = GitUtils.clone(repoUrl, credentialsProvider);
-        LOGGER.info("Repository has been cloned.");
-
-        Properties properties = new Properties();
-        properties.setProperty(SonarProperties.PROJECT_KEY, projectKey);
-        properties.setProperty(SonarProperties.PROJECT_NAME, projectKey);
-        properties.setProperty(SonarProperties.PROJECT_VERSION, "1");
-        properties.setProperty(SonarProperties.SOURCES, repo.getAbsolutePath());
-        properties.setProperty(SonarProperties.PROJECT_BASE_DIR, repo.getAbsolutePath());
-
-        LOGGER.info("Starting analysis...");
-        properties.forEach((k, v) -> LOGGER.debug("########## " + k + ": " + v));
-        embeddedScanner.runAnalysis(properties);
-        LOGGER.info("Analysis has been finished.");
-      } catch (Exception e) {
-        LOGGER.error(e.getMessage());
-        LOGGER.debug("Error while processing " + repoUrl, e);
-      } finally {
-        if (repo != null && !repo.delete()) {
-          LOGGER.warn("Can not delete temporary directory: " + repo.getAbsolutePath());
-        }
-      }
-    });
+    executorService.submit(() -> performAnalysis(repoUrl, projectKey));
     return decorateLink(projectKey);
+  }
+
+  private void performAnalysis(String repoUrl, String projectKey) {
+    File repo = null;
+    try {
+      LOGGER.info("Cloning " + repoUrl);
+      repo = GitUtils.clone(repoUrl, credentialsProvider);
+      LOGGER.info("Repository has been cloned.");
+
+      Properties properties = new Properties();
+      properties.setProperty(SonarProperties.PROJECT_KEY, projectKey);
+      properties.setProperty(SonarProperties.PROJECT_NAME, projectKey);
+      properties.setProperty(SonarProperties.PROJECT_VERSION, "1");
+      properties.setProperty(SonarProperties.SOURCES, repo.getAbsolutePath());
+      properties.setProperty(SonarProperties.PROJECT_BASE_DIR, repo.getAbsolutePath());
+
+      LOGGER.info("Starting analysis...");
+      properties.forEach((k, v) -> LOGGER.debug("########## " + k + ": " + v));
+      embeddedScanner.runAnalysis(properties);
+      LOGGER.info("Analysis has been finished.");
+    } catch (Exception e) {
+      LOGGER.error(e.getMessage());
+      LOGGER.debug("Error while processing " + repoUrl, e);
+    } finally {
+      if (repo != null && !repo.delete()) {
+        LOGGER.warn("Can not delete temporary directory: " + repo.getAbsolutePath());
+      }
+    }
   }
 
   private static String getProjectKey(String repoUrl) throws MalformedURLException {

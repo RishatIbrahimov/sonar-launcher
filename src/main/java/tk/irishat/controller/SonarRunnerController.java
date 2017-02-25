@@ -2,10 +2,13 @@ package tk.irishat.controller;
 
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.transport.CredentialsProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonarsource.scanner.api.EmbeddedScanner;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import tk.irishat.config.ConfigProperties;
 import tk.irishat.utils.GitUtils;
@@ -16,6 +19,8 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * @author Rishat Ibrahimov
@@ -23,6 +28,8 @@ import java.util.Properties;
 @RestController
 @RequestMapping("/api/sonar/scan")
 public class SonarRunnerController {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(SonarRunnerController.class);
 
   @Autowired
   private CredentialsProvider credentialsProvider;
@@ -33,29 +40,39 @@ public class SonarRunnerController {
   @Autowired
   private ConfigProperties configProperties;
 
-  @RequestMapping(method = RequestMethod.GET)
-  public String scan() throws IOException, GitAPIException {
-    File repo = null;
-    try {
-      String repoUrl = "https://github.com/RishatIbrahimov/cpp-tasks.git";
-      String projectKey = getProjectKey(repoUrl);
-      repo = GitUtils.clone(repoUrl, credentialsProvider);
+  private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
-      Properties properties = new Properties();
-      properties.setProperty(SonarProperties.PROJECT_KEY, projectKey);
-      properties.setProperty(SonarProperties.PROJECT_NAME, projectKey);
-      properties.setProperty(SonarProperties.PROJECT_VERSION, "1");
-      properties.setProperty(SonarProperties.SOURCES, repo.getAbsolutePath());
-      properties.setProperty(SonarProperties.PROJECT_BASE_DIR, repo.getAbsolutePath());
+  @RequestMapping(method = RequestMethod.POST)
+  public String scan(@RequestParam("URL") String repoUrl) throws IOException, GitAPIException {
+    String projectKey = getProjectKey(repoUrl);
+    executorService.submit(() -> {
+      File repo = null;
+      try {
+        LOGGER.info("Cloning " + repoUrl);
+        repo = GitUtils.clone(repoUrl, credentialsProvider);
+        LOGGER.info("Repository has been cloned.");
 
-      embeddedScanner.runAnalysis(properties);
+        Properties properties = new Properties();
+        properties.setProperty(SonarProperties.PROJECT_KEY, projectKey);
+        properties.setProperty(SonarProperties.PROJECT_NAME, projectKey);
+        properties.setProperty(SonarProperties.PROJECT_VERSION, "1");
+        properties.setProperty(SonarProperties.SOURCES, repo.getAbsolutePath());
+        properties.setProperty(SonarProperties.PROJECT_BASE_DIR, repo.getAbsolutePath());
 
-      return decorateLink(projectKey);
-    } finally {
-      if (repo != null && !repo.delete()) {
-        System.out.println("can not delete temporary directory: " + repo.getAbsolutePath());
+        LOGGER.info("Starting analysis...");
+        properties.forEach((k, v) -> LOGGER.debug("########## " + k + ": " + v));
+        embeddedScanner.runAnalysis(properties);
+        LOGGER.info("Analysis has been finished.");
+      } catch (Exception e) {
+        LOGGER.error(e.getMessage());
+        LOGGER.debug("Error while processing " + repoUrl, e);
+      } finally {
+        if (repo != null && !repo.delete()) {
+          LOGGER.warn("Can not delete temporary directory: " + repo.getAbsolutePath());
+        }
       }
-    }
+    });
+    return decorateLink(projectKey);
   }
 
   private static String getProjectKey(String repoUrl) throws MalformedURLException {

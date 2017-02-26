@@ -1,14 +1,20 @@
 package tk.irishat.controller;
 
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.transport.CredentialsProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonarsource.scanner.api.EmbeddedScanner;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import tk.irishat.config.ConfigProperties;
 import tk.irishat.utils.GitUtils;
@@ -27,6 +33,7 @@ import java.util.concurrent.Executors;
  */
 @RestController
 @RequestMapping("/api/sonar/scan")
+@Api(value = "/api/sonar/scan", description = "GitHub repository scanning")
 public class SonarRunnerController {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SonarRunnerController.class);
@@ -42,6 +49,12 @@ public class SonarRunnerController {
 
   private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
+  @ApiOperation(value = "Scan GitHub project with SonarQube", response = String.class)
+  @ApiResponses({
+          @ApiResponse(code = 200, message = "OK"),
+          @ApiResponse(code = 401, message = "Unauthorized"),
+          @ApiResponse(code = 500, message = "Something exceptional happened")})
+  @ResponseStatus(HttpStatus.OK)
   @RequestMapping(method = RequestMethod.POST)
   public String scan(@RequestParam("URL") String repoUrl) throws IOException, GitAPIException {
     String projectKey = getProjectKey(repoUrl);
